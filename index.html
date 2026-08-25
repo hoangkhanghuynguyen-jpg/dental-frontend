@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nhận diện sâu răng — Demo</title>
+<style>
+  :root, [data-theme="light"]{
+    --bg: #f4f7f5;
+    --panel: #ffffff;
+    --panel-line: #dde5e1;
+    --ink: #142420;
+    --ink-dim: #5f7269;
+    --accent: #17a874;
+    --accent-dim: #e3f6ec;
+    --info: #1b90b8;
+    --info-dim: #e3f3f8;
+    --warn: #e5493c;
+    --video-bg: #0f1a17;
+    --bg-glow: #e7f2ec;
+    --mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+    --sans: "Inter", -apple-system, "Segoe UI", sans-serif;
+  }
+  [data-theme="dark"]{
+    --bg: #0e1614;
+    --panel: #12211d;
+    --panel-line: #234139;
+    --ink: #eaf3ef;
+    --ink-dim: #9fb8b0;
+    --accent: #3ddc97;
+    --accent-dim: #21382f;
+    --info: #5fc9e8;
+    --info-dim: #16333c;
+    --warn: #ff6b5e;
+    --video-bg: #081210;
+    --bg-glow: #16261f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 15% 0%, var(--bg-glow) 0%, transparent 45%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:32px 16px 60px;
+    transition:background-color .2s ease, color .2s ease;
+  }
+
+  header{
+    width:100%;
+    max-width:1600px;
+    margin-bottom:22px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:16px;
+  }
+  .header-text{ flex:1; }
+
+  .theme-toggle{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    background:var(--panel);
+    border:1px solid var(--panel-line);
+    border-radius:999px;
+    padding:4px;
+    flex-shrink:0;
+  }
+  .theme-toggle button{
+    border:none;
+    background:transparent;
+    color:var(--ink-dim);
+    font-family:var(--sans);
+    font-size:12.5px;
+    font-weight:600;
+    padding:7px 14px;
+    border-radius:999px;
+    cursor:pointer;
+    transition:background-color .15s ease, color .15s ease;
+  }
+  .theme-toggle button.active{
+    background:var(--accent);
+    color:#ffffff;
+  }
+  [data-theme="light"] .theme-toggle button.active{ color:#ffffff; }
+  [data-theme="dark"] .theme-toggle button.active{ color:#07110d; }
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 8px;
+  }
+  h1{
+    font-size:clamp(24px,4vw,34px);
+    margin:0;
+    font-weight:650;
+    letter-spacing:-0.01em;
+  }
+
+  .layout{
+    width:100%;
+    max-width:1600px;
+    display:grid;
+    grid-template-columns:1.8fr 1fr;
+    gap:16px;
+    align-items:start;
+  }
+  @media (max-width: 760px){
+    .layout{ grid-template-columns:1fr; }
+    header{ flex-wrap:wrap; }
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--panel-line);
+    border-radius:14px;
+    padding:18px;
+  }
+
+  /* --- Left: camera panel --- */
+  .camera-panel{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .video-wrap{
+    position:relative;
+    width:100%;
+    aspect-ratio:4/3;
+    background:var(--video-bg);
+    border-radius:10px;
+    overflow:hidden;
+    border:1px solid var(--panel-line);
+  }
+  video, canvas{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+  }
+  canvas{ pointer-events:none; }
+
+  .placeholder{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    color:var(--ink-dim);
+    font-size:13.5px;
+    text-align:center;
+    padding:24px;
+  }
+  .placeholder svg{ opacity:.5; }
+
+  .controls{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  button{
+    font-family:var(--sans);
+    font-size:14px;
+    font-weight:600;
+    padding:10px 18px;
+    border-radius:8px;
+    border:1px solid var(--accent);
+    background:var(--accent);
+    color:#07110d;
+    cursor:pointer;
+    transition:opacity .15s ease;
+  }
+  button:hover{ opacity:.88; }
+  button:disabled{
+    opacity:.35;
+    cursor:not-allowed;
+  }
+  button.secondary{
+    background:transparent;
+    color:var(--ink);
+    border:1px solid var(--panel-line);
+  }
+  .status{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--ink-dim);
+    display:flex;
+    align-items:center;
+    gap:7px;
+    margin-left:auto;
+  }
+  .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--ink-dim);
+  }
+  .dot.live{ background:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); animation:pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse{
+    0%,100%{ box-shadow:0 0 0 3px var(--accent-dim); }
+    50%{ box-shadow:0 0 0 6px var(--accent-dim); }
+  }
+
+  /* --- Right: results column --- */
+  .results-col{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+
+  .results-panel h2{
+    font-family:var(--mono);
+    font-size:11.5px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    margin:0 0 14px;
+    font-weight:600;
+  }
+
+  .results-panel{
+    flex:1;
+  }
+  .finding{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:9px 12px;
+    border-radius:8px;
+    background:var(--accent-dim);
+    margin-bottom:6px;
+    font-size:13.5px;
+    animation:slideIn .25s ease;
+  }
+  @keyframes slideIn{
+    from{ opacity:0; transform:translateY(-4px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+  .finding .name{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-weight:600;
+  }
+  .finding .name::before{
+    content:"";
+    width:8px;height:8px;
+    border-radius:2px;
+    background:var(--warn);
+    display:inline-block;
+    flex-shrink:0;
+  }
+  .finding .conf{
+    font-family:var(--mono);
+    color:var(--ink-dim);
+    font-size:12px;
+    flex-shrink:0;
+    margin-left:10px;
+  }
+  .empty-note{
+    color:var(--ink-dim);
+    font-size:13px;
+    font-family:var(--mono);
+    margin:0;
+  }
+
+  footer{
+    max-width:1600px;
+    width:100%;
+    margin-top:22px;
+    color:var(--ink-dim);
+    font-size:12.5px;
+    line-height:1.6;
+    font-family:var(--mono);
+  }
+  footer b{ color:var(--ink); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-text">
+    <p class="eyebrow">Demo · Đồ án học tập</p>
+    <h1>Nhận diện sâu răng qua camera</h1>
+  </div>
+  <div class="theme-toggle">
+    <button id="lightBtn" class="active">Sáng</button>
+    <button id="darkBtn">Tối</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <div class="panel camera-panel">
+    <div class="video-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <div class="placeholder" id="placeholder">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M23 19v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/>
+          <path d="M1 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+        </svg>
+        <span>Chưa bật camera. Bấm "Mở camera" để bắt đầu.</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn">Mở camera</button>
+      <button id="stopBtn" class="secondary" disabled>Tắt camera</button>
+      <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Chưa kết nối</span></div>
+    </div>
+  </div>
+
+  <div class="results-col">
+    <div class="panel results-panel">
+      <h2>Kết quả nhận diện</h2>
+      <div id="findingsList">
+        <p class="empty-note">— chưa có dữ liệu —</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+</footer>
+
+<script>
+let isRunning = false;
+let detectInterval = null;
+
+// Hàm bật/tắt camera
+async function toggleCamera() {
+    const video = document.getElementById('webcam'); // Đảm bảo id video của bạn khớp nhé
+    const overlayCanvas = document.getElementById('overlayCanvas');
+    const overlayCtx = overlayCanvas.getContext('2d');
+
+    if (!isRunning) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+            });
+            video.srcObject = stream;
+            
+            video.onloadedmetadata = () => {
+                overlayCanvas.width = video.videoWidth;
+                overlayCanvas.height = video.videoHeight;
+            };
+
+            // Bắt đầu gửi ảnh liên tục mỗi 150ms (~6-7 khung hình/giây) lên Backend
+            detectInterval = setInterval(() => sendFrameToBackend(video, overlayCanvas, overlayCtx), 150);
+            
+            isRunning = true;
+        } catch (err) {
+            alert("Không thể mở camera: " + err.message);
+        }
+    } else {
+        if (video.srcObject) {
+            video.srcObject.getTracks().forEach(track => track.stop());
+            video.srcObject = null;
+        }
+        clearInterval(detectInterval);
+        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        isRunning = false;
+    }
+}
+
+// Hàm gửi khung hình dạng Base64 qua HTTP POST tới API /api/detect
+async function sendFrameToBackend(video, canvas, ctx) {
+    if (!isRunning) return;
+
+    // Tạo canvas tạm để chụp lại khung hình hiện tại của video
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width || 640;
+    tempCanvas.height = canvas.height || 480;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+
+    const base64Image = tempCanvas.toDataURL('image/jpeg', 0.7);
+
+    try {
+        const response = await fetch('http://localhost:8000/api/detect', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ image: base64Image })
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        drawDetections(data.detections, ctx, canvas.width, canvas.height);
+    } catch (err) {
+        console.error("Lỗi kết nối Backend:", err);
+    }
+}
+
+// Hàm vẽ khung nhận diện (Bounding box) lên màn hình
+function drawDetections(detections, ctx, width, height) {
+    ctx.clearRect(0, 0, width, height);
+    if (!detections || detections.length === 0) return;
+
+    detections.forEach(det => {
+        // Backend của bạn trả về bbox theo định dạng [x, y, w, h]
+        const [x, y, w, h] = det.bbox;
+        const label = `${det.label} ${(det.confidence * 100).toFixed(1)}%`;
+
+        // Phân màu theo nhãn bệnh
+        let color = "#ff4757"; // Đỏ (Sâu răng) mặc định
+        if (det.label === "sau_chom") color = "#ffa502";      // Vàng (Sâu chớm)
+        if (det.label === "cao_rang_an") color = "#2ed573";   // Xanh lá (Cao răng ẩn)
+
+        // Vẽ khung chữ nhật
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, w, h);
+
+        // Vẽ nhãn tên bệnh ở góc trên khung
+        ctx.fillStyle = color;
+        ctx.font = "bold 15px Arial";
+        const textWidth = ctx.measureText(label).width;
+        ctx.fillRect(x, y > 25 ? y - 25 : 0, textWidth + 10, 25);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(label, x + 5, y > 25 ? y - 7 : 18);
+    });
+}
+</script>
+
+</body>
+</html>
