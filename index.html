@@ -391,7 +391,7 @@ async function sendFrameToBackend(video, canvas, ctx) {
     const base64Image = tempCanvas.toDataURL('image/jpeg', 0.7);
 
     try {
-        const response = await fetch('http://localhost:8000/api/detect', {
+        const response = await fetch('https://dental-ai-detection.onrender.com/api/detect', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
