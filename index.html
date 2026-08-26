@@ -341,52 +341,75 @@
 let isRunning = false;
 let detectInterval = null;
 
-// Hàm bật/tắt camera
-async function toggleCamera() {
-    const video = document.getElementById('webcam'); // Đảm bảo id video của bạn khớp nhé
-    const overlayCanvas = document.getElementById('overlayCanvas');
-    const overlayCtx = overlayCanvas.getContext('2d');
+// Lấy các thành phần từ giao diện HTML
+const video = document.getElementById('video');
+const overlayCanvas = document.getElementById('overlay');
+const overlayCtx = overlayCanvas.getContext('2d');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const placeholder = document.getElementById('placeholder');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
 
-    if (!isRunning) {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 1280 }, height: { ideal: 720 } }
-            });
-            video.srcObject = stream;
-            
-            video.onloadedmetadata = () => {
-                overlayCanvas.width = video.videoWidth;
-                overlayCanvas.height = video.videoHeight;
-            };
+// Lệnh khi bấm nút "Mở camera"
+startBtn.addEventListener('click', async () => {
+    if (isRunning) return;
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        video.srcObject = stream;
+        
+        video.onloadedmetadata = () => {
+            overlayCanvas.width = video.videoWidth;
+            overlayCanvas.height = video.videoHeight;
+        };
 
-            // Bắt đầu gửi ảnh liên tục mỗi 150ms (~6-7 khung hình/giây) lên Backend
-            detectInterval = setInterval(() => sendFrameToBackend(video, overlayCanvas, overlayCtx), 150);
-            
-            isRunning = true;
-        } catch (err) {
-            alert("Không thể mở camera: " + err.message);
-        }
-    } else {
-        if (video.srcObject) {
-            video.srcObject.getTracks().forEach(track => track.stop());
-            video.srcObject = null;
-        }
-        clearInterval(detectInterval);
-        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-        isRunning = false;
+        // Đổi giao diện: Ẩn chữ hướng dẫn, bật sáng đèn trạng thái
+        placeholder.style.display = 'none';
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        statusDot.classList.add('live');
+        statusText.innerText = 'Đang quét';
+
+        // Gửi ảnh 500ms/lần (Tránh làm quá tải máy chủ Render miễn phí)
+        detectInterval = setInterval(() => sendFrameToBackend(video, overlayCanvas, overlayCtx), 500);
+        
+        isRunning = true;
+    } catch (err) {
+        alert("Không thể mở camera: " + err.message);
     }
-}
+});
+
+// Lệnh khi bấm nút "Tắt camera"
+stopBtn.addEventListener('click', () => {
+    if (!isRunning) return;
+    if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+    }
+    clearInterval(detectInterval);
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    
+    // Trả giao diện về như cũ
+    placeholder.style.display = 'flex';
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    statusDot.classList.remove('live');
+    statusText.innerText = 'Chưa kết nối';
+    
+    isRunning = false;
+});
 
 // Hàm gửi khung hình dạng Base64 qua HTTP POST tới API /api/detect
-async function sendFrameToBackend(video, canvas, ctx) {
+async function sendFrameToBackend(videoElement, canvasElement, ctx) {
     if (!isRunning) return;
 
-    // Tạo canvas tạm để chụp lại khung hình hiện tại của video
     const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = canvas.width || 640;
-    tempCanvas.height = canvas.height || 480;
+    tempCanvas.width = canvasElement.width || 640;
+    tempCanvas.height = canvasElement.height || 480;
     const tempCtx = tempCanvas.getContext('2d');
-    tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+    tempCtx.drawImage(videoElement, 0, 0, tempCanvas.width, tempCanvas.height);
 
     const base64Image = tempCanvas.toDataURL('image/jpeg', 0.7);
 
@@ -402,33 +425,30 @@ async function sendFrameToBackend(video, canvas, ctx) {
         if (!response.ok) return;
 
         const data = await response.json();
-        drawDetections(data.detections, ctx, canvas.width, canvas.height);
+        drawDetections(data.detections, ctx, canvasElement.width, canvasElement.height);
+        updateFindings(data.detections);
     } catch (err) {
         console.error("Lỗi kết nối Backend:", err);
     }
 }
 
-// Hàm vẽ khung nhận diện (Bounding box) lên màn hình
+// Hàm vẽ khung nhận diện lên màn hình
 function drawDetections(detections, ctx, width, height) {
     ctx.clearRect(0, 0, width, height);
     if (!detections || detections.length === 0) return;
 
     detections.forEach(det => {
-        // Backend của bạn trả về bbox theo định dạng [x, y, w, h]
         const [x, y, w, h] = det.bbox;
         const label = `${det.label} ${(det.confidence * 100).toFixed(1)}%`;
 
-        // Phân màu theo nhãn bệnh
-        let color = "#ff4757"; // Đỏ (Sâu răng) mặc định
-        if (det.label === "sau_chom") color = "#ffa502";      // Vàng (Sâu chớm)
-        if (det.label === "cao_rang_an") color = "#2ed573";   // Xanh lá (Cao răng ẩn)
+        let color = "#ff4757"; 
+        if (det.label === "sau_chom") color = "#ffa502";      
+        if (det.label === "cao_rang_an") color = "#2ed573";   
 
-        // Vẽ khung chữ nhật
         ctx.strokeStyle = color;
         ctx.lineWidth = 3;
         ctx.strokeRect(x, y, w, h);
 
-        // Vẽ nhãn tên bệnh ở góc trên khung
         ctx.fillStyle = color;
         ctx.font = "bold 15px Arial";
         const textWidth = ctx.measureText(label).width;
@@ -436,6 +456,23 @@ function drawDetections(detections, ctx, width, height) {
 
         ctx.fillStyle = "#ffffff";
         ctx.fillText(label, x + 5, y > 25 ? y - 7 : 18);
+    });
+}
+
+// Hàm phụ trợ: Cập nhật danh sách bệnh lý bên cột phải của giao diện
+function updateFindings(detections) {
+    const list = document.getElementById('findingsList');
+    if (!detections || detections.length === 0) {
+        list.innerHTML = '<p class="empty-note">— không phát hiện bất thường —</p>';
+        return;
+    }
+    list.innerHTML = '';
+    detections.forEach(det => {
+        list.innerHTML += `
+        <div class="finding">
+            <span class="name">${det.label}</span>
+            <span class="conf">${(det.confidence * 100).toFixed(0)}%</span>
+        </div>`;
     });
 }
 </script>
