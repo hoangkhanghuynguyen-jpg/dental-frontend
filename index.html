@@ -414,8 +414,8 @@ async function processNextFrame() {
 // Hàm gửi khung hình cho API
 async function sendFrameToBackend(videoElement, canvasElement, ctx) {
     const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = canvasElement.width || 640;
-    tempCanvas.height = canvasElement.height || 480;
+    tempCanvas.width = 320;  // Ép ảnh nhỏ lại cho server dễ thở
+    tempCanvas.height = 240;
     const tempCtx = tempCanvas.getContext('2d');
     tempCtx.drawImage(videoElement, 0, 0, tempCanvas.width, tempCanvas.height);
 
