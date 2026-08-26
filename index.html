@@ -373,7 +373,7 @@ startBtn.addEventListener('click', async () => {
         statusText.innerText = 'Đang quét';
 
         // Gửi ảnh 500ms/lần (Tránh làm quá tải máy chủ Render miễn phí)
-        detectInterval = setInterval(() => sendFrameToBackend(video, overlayCanvas, overlayCtx), 500);
+        detectInterval = setInterval(() => sendFrameToBackend(video, overlayCanvas, overlayCtx), 3000);
         
         isRunning = true;
     } catch (err) {
