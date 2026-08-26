@@ -339,7 +339,6 @@
 
 <script>
 let isRunning = false;
-let detectInterval = null;
 
 // Lấy các thành phần từ giao diện HTML
 const video = document.getElementById('video');
@@ -365,17 +364,17 @@ startBtn.addEventListener('click', async () => {
             overlayCanvas.height = video.videoHeight;
         };
 
-        // Đổi giao diện: Ẩn chữ hướng dẫn, bật sáng đèn trạng thái
+        // Đổi giao diện
         placeholder.style.display = 'none';
         startBtn.disabled = true;
         stopBtn.disabled = false;
         statusDot.classList.add('live');
         statusText.innerText = 'Đang quét';
 
-        // Gửi ảnh 500ms/lần (Tránh làm quá tải máy chủ Render miễn phí)
-        detectInterval = setInterval(() => sendFrameToBackend(video, overlayCanvas, overlayCtx), 3000);
-        
         isRunning = true;
+        // Bắt đầu vòng lặp gửi ảnh thông minh (Không dùng setInterval nữa)
+        processNextFrame();
+        
     } catch (err) {
         alert("Không thể mở camera: " + err.message);
     }
@@ -388,10 +387,8 @@ stopBtn.addEventListener('click', () => {
         video.srcObject.getTracks().forEach(track => track.stop());
         video.srcObject = null;
     }
-    clearInterval(detectInterval);
     overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
     
-    // Trả giao diện về như cũ
     placeholder.style.display = 'flex';
     startBtn.disabled = false;
     stopBtn.disabled = true;
@@ -401,10 +398,21 @@ stopBtn.addEventListener('click', () => {
     isRunning = false;
 });
 
-// Hàm gửi khung hình dạng Base64 qua HTTP POST tới API /api/detect
-async function sendFrameToBackend(videoElement, canvasElement, ctx) {
-    if (!isRunning) return;
+// VÒNG LẶP THÔNG MINH: Đợi server trả lời xong mới gửi ảnh tiếp
+async function processNextFrame() {
+    if (!isRunning) return; // Nếu tắt camera thì dừng lại ngay
+    
+    // Đợi server xử lý xong 1 ảnh
+    await sendFrameToBackend(video, overlayCanvas, overlayCtx);
+    
+    // Xử lý xong, cho máy chủ nghỉ 1.5 giây rồi mới lặp lại (tránh tràn RAM)
+    if (isRunning) {
+        setTimeout(processNextFrame, 1500);
+    }
+}
 
+// Hàm gửi khung hình cho API
+async function sendFrameToBackend(videoElement, canvasElement, ctx) {
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = canvasElement.width || 640;
     tempCanvas.height = canvasElement.height || 480;
@@ -416,9 +424,7 @@ async function sendFrameToBackend(videoElement, canvasElement, ctx) {
     try {
         const response = await fetch('https://dental-ai-detection.onrender.com/api/detect', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ image: base64Image })
         });
 
@@ -428,7 +434,7 @@ async function sendFrameToBackend(videoElement, canvasElement, ctx) {
         drawDetections(data.detections, ctx, canvasElement.width, canvasElement.height);
         updateFindings(data.detections);
     } catch (err) {
-        console.error("Lỗi kết nối Backend:", err);
+        console.log("Máy chủ đang bận xử lý, vui lòng đợi..."); 
     }
 }
 
@@ -459,7 +465,7 @@ function drawDetections(detections, ctx, width, height) {
     });
 }
 
-// Hàm phụ trợ: Cập nhật danh sách bệnh lý bên cột phải của giao diện
+// Hàm phụ trợ: Cập nhật danh sách bệnh lý bên cột phải
 function updateFindings(detections) {
     const list = document.getElementById('findingsList');
     if (!detections || detections.length === 0) {
